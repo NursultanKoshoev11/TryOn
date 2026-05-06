@@ -9,9 +9,10 @@ services:
       POSTGRES_PASSWORD: tryon_password
       POSTGRES_DB: tryon_ai_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts:/scripts:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tryon_user"]
       interval: 10s
@@ -22,7 +23,7 @@ services:
     image: redis:7-alpine
     container_name: tryon_redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -38,8 +39,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9002:9000"
+      - "9003:9001"
     volumes:
       - minio_data:/minio_data
     command: server /minio_data --console-address ":9001"
@@ -55,7 +56,7 @@ services:
       dockerfile: Dockerfile
     container_name: tryon_api
     environment:
-      DATABASE_URL: postgres://tryon_user:tryon_password@postgres:5432/tryon_ai_db
+      DATABASE_URL: postgres://tryon_user:tryon_password@postgres:5432/tryon_ai_db?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: tryon-ai
@@ -78,9 +79,28 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    volumes:
-      - ./services/api:/app
-    command: go run main.go
+
+  worker:
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    container_name: tryon_worker
+    environment:
+      DATABASE_URL: postgres://tryon_user:tryon_password@postgres:5432/tryon_ai_db?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: tryon-ai
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_USE_SSL: "false"
+      AI_PROVIDER: mock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
 
 volumes:
   postgres_data:

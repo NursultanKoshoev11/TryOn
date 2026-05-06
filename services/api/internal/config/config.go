@@ -27,7 +27,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		DatabaseURL:           getEnv("DATABASE_URL", "postgres://tryon_user:tryon_password@localhost:5432/tryon_ai_db"),
+		DatabaseURL:           getEnv("DATABASE_URL", "postgres://tryon_user:tryon_password@localhost:5432/tryon_ai_db?sslmode=disable"),
 		RedisURL:              getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		S3Endpoint:            getEnv("S3_ENDPOINT", "http://localhost:9000"),
 		S3Bucket:              getEnv("S3_BUCKET", "tryon-ai"),

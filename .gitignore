@@ -10,3 +10,17 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+### Node / Next.js
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+### Environment
+.env
+.env.local
+.env.*.local

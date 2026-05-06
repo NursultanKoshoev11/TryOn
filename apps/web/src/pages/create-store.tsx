@@ -1,133 +1,135 @@
-import React, { useState } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
-export default function CreateStore() {
+import { AppShell, EmptyState, PageMeta } from "@/components/site";
+import { createOrganization, getStoredToken } from "@/lib/api";
+
+export default function CreateStorePage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    name: '',
-    storeDomain: '',
+  const [formState, setFormState] = useState({
+    name: "",
+    storeDomain: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  useEffect(() => {
+    if (!getStoredToken()) {
+      router.replace("/login");
+    }
+  }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    const { name, value } = event.target;
+    setFormState((current) => ({ ...current, [name]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    const token = getStoredToken();
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/organizations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          store_domain: formData.storeDomain,
-        }),
+      const organization = await createOrganization(token, {
+        name: formState.name,
+        store_domain: formState.storeDomain,
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create store');
-      }
-
-      const data = await response.json();
-      router.push(`/store/${data.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create store');
+      router.push(`/store/${organization.id}`);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Failed to create store"
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <>
-      <Head>
-        <title>Create Store - TryOnAI</title>
-      </Head>
-
-      <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
-              TryOnAI
-            </Link>
-            <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-              Back to Dashboard
-            </Link>
-          </div>
-        </nav>
-
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="bg-white rounded-lg shadow-md p-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-6">Create New Store</h1>
-
-            {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+      <PageMeta
+        title="Create Store - VirtualFit API"
+        description="Create a merchant organization and set its primary storefront domain."
+      />
+      <AppShell
+        title="Create a new storefront workspace"
+        subtitle="This is the first onboarding step from the prompt: create the organization, attach its primary domain, then continue with plan and API credentials."
+        actions={
+          <Link href="/dashboard" className="button-secondary">
+            Back to dashboard
+          </Link>
+        }
+      >
+        <div className="mx-auto max-w-3xl">
+          <div className="card-panel p-8">
+            {error ? (
+              <div className="mb-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
                 {error}
               </div>
-            )}
+            ) : null}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Store Name
+                <label className="field-label" htmlFor="name">
+                  Store name
                 </label>
                 <input
-                  type="text"
+                  id="name"
                   name="name"
-                  value={formData.name}
+                  className="field"
+                  value={formState.name}
                   onChange={handleChange}
+                  placeholder="Northline Atelier"
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="My Fashion Store"
                 />
-                <p className="mt-1 text-sm text-gray-500">The name of your online store</p>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  This becomes the merchant workspace label inside the dashboard.
+                </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Store Domain
+                <label className="field-label" htmlFor="storeDomain">
+                  Primary storefront domain
                 </label>
                 <input
-                  type="text"
+                  id="storeDomain"
                   name="storeDomain"
-                  value={formData.storeDomain}
+                  className="field"
+                  value={formState.storeDomain}
                   onChange={handleChange}
+                  placeholder="northlineatelier.com"
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="store.example.com"
                 />
-                <p className="mt-1 text-sm text-gray-500">Your store's domain (used for domain restrictions)</p>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  Use the production domain that should be allowed for widget or
+                  public token sessions.
+                </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"
-              >
-                {loading ? 'Creating store...' : 'Create Store'}
+              <button type="submit" className="button-primary" disabled={loading}>
+                {loading ? "Creating storefront..." : "Create storefront"}
               </button>
             </form>
           </div>
+
+          <div className="mt-6">
+            <EmptyState
+              title="Next onboarding steps"
+              description="After the organization is created, the workspace guides the merchant through plan selection, API key creation, allowed domains, integration snippets, and privacy settings."
+            />
+          </div>
         </div>
-      </div>
+      </AppShell>
     </>
   );
 }

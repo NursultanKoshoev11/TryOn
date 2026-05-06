@@ -1,133 +1,244 @@
-import React, { useState, useEffect } from 'react';
-import Head from 'next/head';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { useEffect, useMemo, useState } from "react";
 
-export default function Dashboard() {
+import {
+  AppShell,
+  EmptyState,
+  MetricCard,
+  PageMeta,
+  StatusBadge,
+} from "@/components/site";
+import {
+  fetchCurrentUser,
+  fetchOrganizations,
+  getStoredToken,
+  type Organization,
+  type SessionUser,
+} from "@/lib/api";
+import { mockUsage, onboardingChecklist } from "@/lib/platform";
+
+export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    const token = getStoredToken();
+
     if (!token) {
-      router.push('/login');
+      router.replace("/login");
       return;
     }
 
-    fetchUserData(token);
-  }, []);
+    Promise.all([fetchCurrentUser(token), fetchOrganizations(token)])
+      .then(([currentUser, currentOrganizations]) => {
+        setUser(currentUser);
+        setOrganizations(currentOrganizations);
+      })
+      .catch((requestError) => {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load workspace"
+        );
+      })
+      .finally(() => setLoading(false));
+  }, [router]);
 
-  const fetchUserData = async (token: string) => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  const orgSummary = useMemo(() => {
+    return {
+      totalStores: organizations.length.toString(),
+      monthlyUsage: organizations.length
+        ? `${mockUsage.monthly_generations}`
+        : "0",
+      plan: organizations.length ? mockUsage.plan : "No plan yet",
+    };
+  }, [organizations]);
 
-      if (!response.ok) throw new Error('Failed to fetch user');
-      const userData = await response.json();
-      setUser(userData);
-
-      const orgsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/organizations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (orgsResponse.ok) {
-        const orgsData = await orgsResponse.json();
-        setOrganizations(orgsData.organizations || []);
-      }
-    } catch (err) {
-      console.error(err);
-      localStorage.removeItem('access_token');
-      router.push('/login');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    router.push('/login');
-  };
+  function handleLogout() {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    router.push("/login");
+  }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <>
+        <PageMeta title="Dashboard - VirtualFit API" />
+        <AppShell title="Loading workspace" subtitle="Preparing merchant data.">
+          <div className="card-panel p-8 text-sm text-zinc-400">
+            Loading stores, permissions, and recent activity...
+          </div>
+        </AppShell>
+      </>
+    );
+  }
+
+  if (error && !user) {
+    return (
+      <>
+        <PageMeta title="Dashboard - VirtualFit API" />
+        <AppShell
+          title="Workspace unavailable"
+          subtitle="The session could not be restored."
+          actions={
+            <Link href="/login" className="button-primary">
+              Sign in again
+            </Link>
+          }
+        >
+          <EmptyState
+            title="Authentication issue"
+            description={error}
+            action={
+              <Link href="/login" className="button-secondary">
+                Return to login
+              </Link>
+            }
+          />
+        </AppShell>
+      </>
+    );
   }
 
   return (
     <>
-      <Head>
-        <title>Dashboard - TryOnAI</title>
-      </Head>
+      <PageMeta
+        title="Dashboard - VirtualFit API"
+        description="Merchant dashboard for AI virtual try-on stores, API keys, and usage."
+      />
+      <AppShell
+        title="Merchant dashboard"
+        subtitle={`Welcome${user?.email ? `, ${user.email}` : ""}. Use this workspace to manage organizations, review onboarding progress, and move into deeper store-level configuration.`}
+        actions={
+          <>
+            <Link href="/create-store" className="button-primary">
+              Create store
+            </Link>
+            {user?.role === "platform_admin" ? (
+              <Link href="/admin" className="button-secondary">
+                Admin view
+              </Link>
+            ) : null}
+            <button onClick={handleLogout} className="button-ghost">
+              Sign out
+            </button>
+          </>
+        }
+      >
+        <div className="grid gap-5 md:grid-cols-3">
+          <MetricCard
+            label="Organizations"
+            value={orgSummary.totalStores}
+            hint="Each merchant store is isolated as its own tenant."
+          />
+          <MetricCard
+            label="Monthly generation preview"
+            value={orgSummary.monthlyUsage}
+            hint="Illustrative dashboard metric until each store is opened."
+          />
+          <MetricCard
+            label="Typical plan"
+            value={orgSummary.plan}
+            hint="Billing detail appears inside the store workspace."
+          />
+        </div>
 
-      <div className="min-h-screen bg-gray-50">
-        {/* Navigation */}
-        <nav className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <div className="text-2xl font-bold text-gray-900">TryOnAI</div>
-            <div className="flex gap-4 items-center">
-              <span className="text-gray-600">{user?.email}</span>
-              <button
-                onClick={handleLogout}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </nav>
-
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-            <p className="text-gray-600">Welcome back, {user?.full_name || user?.email}</p>
-          </div>
-
-          {/* Organizations Section */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Your Stores</h2>
-              <Link
-                href="/create-store"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-              >
-                Create Store
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="card-panel p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="eyebrow">Your stores</div>
+                <h2 className="mt-3 font-display text-3xl font-semibold">
+                  Organization workspaces
+                </h2>
+              </div>
+              <Link href="/create-store" className="button-secondary">
+                New store
               </Link>
             </div>
 
             {organizations.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-600 mb-4">No stores yet. Create your first store to get started.</p>
-                <Link
-                  href="/create-store"
-                  className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                >
-                  Create First Store
-                </Link>
+              <div className="mt-8">
+                <EmptyState
+                  title="No stores yet"
+                  description="Create your first organization to unlock API keys, integration snippets, usage analytics, and privacy controls."
+                  action={
+                    <Link href="/create-store" className="button-primary">
+                      Create first store
+                    </Link>
+                  }
+                />
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {organizations.map((org) => (
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                {organizations.map((organization) => (
                   <Link
-                    key={org.id}
-                    href={`/store/${org.id}`}
-                    className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow"
+                    key={organization.id}
+                    href={`/store/${organization.id}`}
+                    className="rounded-[1.75rem] border border-white/8 bg-white/4 p-5 transition hover:border-white/16 hover:bg-white/6"
                   >
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{org.name}</h3>
-                    <p className="text-gray-600 text-sm mb-4">{org.store_domain}</p>
-                    <div className="text-sm text-gray-500">
-                      Status: <span className="font-semibold text-green-600">{org.status}</span>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-display text-2xl font-semibold text-white">
+                          {organization.name}
+                        </h3>
+                        <p className="mt-2 text-sm text-zinc-400">
+                          {organization.store_domain}
+                        </p>
+                      </div>
+                      <StatusBadge value={organization.status} />
                     </div>
+                    <p className="mt-5 text-sm leading-7 text-zinc-400">
+                      Open the workspace to manage API keys, see generation
+                      history, update domain settings, and review billing
+                      placeholders.
+                    </p>
                   </Link>
                 ))}
               </div>
             )}
           </div>
+
+          <div className="space-y-6">
+            <div className="card-panel p-6">
+              <div className="eyebrow">Onboarding</div>
+              <h2 className="mt-3 font-display text-3xl font-semibold text-white">
+                Merchant setup checklist
+              </h2>
+              <div className="mt-6 space-y-3">
+                {onboardingChecklist.map((item, index) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-white/8 bg-white/4 px-4 py-3 text-sm text-zinc-300"
+                  >
+                    <span className="mr-3 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-xs text-zinc-400">
+                      {index + 1}
+                    </span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card-panel p-6">
+              <div className="eyebrow">Current role</div>
+              <h2 className="mt-3 font-display text-3xl font-semibold text-white">
+                {user?.role || "merchant_owner"}
+              </h2>
+              <p className="mt-4 text-sm leading-7 text-zinc-400">
+                The current backend exposes merchant and admin permission paths.
+                This dashboard now gives those roles a much clearer entry point.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      </AppShell>
     </>
   );
 }

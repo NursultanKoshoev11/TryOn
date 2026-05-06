@@ -1,104 +1,113 @@
-import React, { useState } from 'react';
-import Head from 'next/head';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { FormEvent, useState } from "react";
 
-export default function Login() {
+import { AuthShell, PageMeta } from "@/components/site";
+import { API_URL } from "@/lib/api";
+
+export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
+      const payload = await response.json().catch(() => null);
+
       if (!response.ok) {
-        throw new Error('Invalid credentials');
+        throw new Error(payload?.error || "Invalid credentials");
       }
 
-      const data = await response.json();
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
-      router.push('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      localStorage.setItem("access_token", payload.access_token);
+      localStorage.setItem("refresh_token", payload.refresh_token);
+      router.push("/dashboard");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Login failed"
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <>
-      <Head>
-        <title>Login - TryOnAI</title>
-      </Head>
+      <PageMeta
+        title="Sign In - VirtualFit API"
+        description="Access the merchant workspace for AI virtual try-on operations."
+      />
+      <AuthShell
+        title="Sign in"
+        subtitle="Use your merchant credentials to manage stores, API keys, usage, and generation history."
+        alternateLink={
+          <>
+            No account yet?{" "}
+            <Link href="/register" className="text-[#ffcf93] hover:text-white">
+              Create one
+            </Link>
+          </>
+        }
+      >
+        {error ? (
+          <div className="mb-5 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        ) : null}
 
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center">Sign In</h2>
-
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="field-label" htmlFor="email">
+              Work email
+            </label>
+            <input
+              id="email"
+              type="email"
+              className="field"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="team@store.com"
+              required
+            />
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="field-label mb-0" htmlFor="password">
                 Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="••••••••"
-              />
+              <Link
+                href="/forgot-password"
+                className="text-sm text-zinc-400 transition hover:text-white"
+              >
+                Forgot password
+              </Link>
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-gray-600">
-            Don't have an account?{' '}
-            <Link href="/register" className="text-blue-600 hover:text-blue-700 font-semibold">
-              Sign up
-            </Link>
-          </p>
-        </div>
-      </div>
+            <input
+              id="password"
+              type="password"
+              className="field"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Enter your password"
+              required
+            />
+          </div>
+          <button type="submit" className="button-primary w-full" disabled={loading}>
+            {loading ? "Signing in..." : "Enter workspace"}
+          </button>
+        </form>
+      </AuthShell>
     </>
   );
 }
